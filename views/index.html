@@ -18,6 +18,8 @@
       color: Green;
       height: calc(100vh - 100px);
       overflow-y: auto;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
     #input {
       width: 100%;
@@ -43,58 +45,84 @@
   <div id="messages"></div>
   <input id="input" placeholder="type message... Enter or ; to send">
   <script>
-    const username = prompt("Choose username:") || "Unknown";
-    const messagesEl = document.getElementById("messages");
-    const inputEl = document.getElementById("input");
-    const chatLog = [];
+    var username = prompt("Choose username:") || "Unknown";
+    var messagesEl = document.getElementById("messages");
+    var inputEl = document.getElementById("input");
+    var chatLog = [];
+    var messageCount = 0;
+    var MAX_MESSAGES = 500; // Keep only last 500 to prevent memory bloat
     
     // Connect to WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var ws = new WebSocket(protocol + '//' + window.location.host);
     
-    ws.onopen = () => {
-      console.log('Connected to HyperTalk');
+    ws.onopen = function() {
+      console.log('Connected to HyprTalk');
     };
     
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+    ws.onmessage = function(event) {
+      var msg = JSON.parse(event.data);
       
       if (msg.type === 'history') {
-        // Load existing messages
-        chatLog.push(...msg.data);
+        for (var i = 0; i < msg.data.length; i++) {
+          chatLog.push(msg.data[i]);
+        }
         render();
       } else if (msg.type === 'message') {
-        // Add new message
         chatLog.push(msg.data);
-        render();
+        messageCount++;
+        
+        // Trim old messages if we exceed limit
+        if (chatLog.length > MAX_MESSAGES) {
+          chatLog.splice(0, chatLog.length - MAX_MESSAGES);
+        }
+        
+        appendMessage(msg.data);
       } else if (msg.type === 'cleared') {
-        // Chat was cleared
-        chatLog.length = 0;
-        render();
-        messagesEl.textContent += "[Chat cleared]\n";
+        chatLog = [];
+        messageCount = 0;
+        messagesEl.textContent = '[Chat cleared]\n';
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
     };
     
-    ws.onerror = (error) => {
+    ws.onerror = function(error) {
       console.error('WebSocket error:', error);
       messagesEl.textContent += '\n[Connection error]\n';
     };
     
-    ws.onclose = () => {
+    ws.onclose = function() {
       messagesEl.textContent += '\n[Disconnected from server]\n';
     };
     
+    function formatMessage(m) {
+      return m.user + ' >> ' + m.text;
+    }
+    
+    function appendMessage(m) {
+      var line = formatMessage(m);
+      if (messagesEl.textContent === '') {
+        messagesEl.textContent = line;
+      } else {
+        messagesEl.textContent += '\n' + line;
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    
     function render() {
-      messagesEl.textContent = chatLog.map(m => `${m.user} >> ${m.text}`).join("\n");
+      var output = '';
+      for (var i = 0; i < chatLog.length; i++) {
+        if (i > 0) output += '\n';
+        output += formatMessage(chatLog[i]);
+      }
+      messagesEl.textContent = output;
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
     
     function sendMessage() {
-      const text = inputEl.value.trim();
+      var text = inputEl.value.trim();
       if (text.length === 0) return;
       
-      // Backdoor: /clear command
       if (text === '/clear') {
         ws.send(JSON.stringify({ type: 'command', command: 'clear' }));
         inputEl.value = "";
@@ -105,19 +133,17 @@
       inputEl.value = "";
     }
     
-    // Enter key to send
-    inputEl.addEventListener("keydown", (e) => {
+    inputEl.addEventListener("keydown", function(e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     });
     
-    // Semicolon to send (on input event)
-    inputEl.addEventListener("input", () => {
-      const v = inputEl.value;
-      if (v.endsWith(";")) {
-        const msgText = v.slice(0, -1).trim();
+    inputEl.addEventListener("input", function() {
+      var v = inputEl.value;
+      if (v.charAt(v.length - 1) === ';') {
+        var msgText = v.slice(0, -1).trim();
         if (msgText.length > 0) {
           ws.send(JSON.stringify({ type: 'message', user: username, text: msgText }));
           inputEl.value = "";
