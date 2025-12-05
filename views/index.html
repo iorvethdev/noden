@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>HyperTalk</title>
+  <title>HyprTalk</title>
   <style>
     body {
       background: Black;
@@ -28,6 +28,7 @@
       color: Green;
       border: none;
       outline: none;
+      background: Black;
     }
     #bar {
       background: #0b3e91;
@@ -38,24 +39,23 @@
   </style>
 </head>
 <body>
-  <div id="bar">HyperTalk</div>
+  <div id="bar">HyprTalk</div>
   <div id="messages"></div>
-  <input id="input" placeholder="type message... end with ; to send">
-
+  <input id="input" placeholder="type message... Enter or ; to send">
   <script>
     const username = prompt("Choose username:") || "Unknown";
     const messagesEl = document.getElementById("messages");
     const inputEl = document.getElementById("input");
     const chatLog = [];
-
+    
     // Connect to WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
-
+    
     ws.onopen = () => {
       console.log('Connected to HyperTalk');
     };
-
+    
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       
@@ -67,23 +67,53 @@
         // Add new message
         chatLog.push(msg.data);
         render();
+      } else if (msg.type === 'cleared') {
+        // Chat was cleared
+        chatLog.length = 0;
+        render();
+        messagesEl.textContent += "[Chat cleared]\n";
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       }
     };
-
+    
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       messagesEl.textContent += '\n[Connection error]\n';
     };
-
+    
     ws.onclose = () => {
       messagesEl.textContent += '\n[Disconnected from server]\n';
     };
-
+    
     function render() {
       messagesEl.textContent = chatLog.map(m => `${m.user} >> ${m.text}`).join("\n");
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-
+    
+    function sendMessage() {
+      const text = inputEl.value.trim();
+      if (text.length === 0) return;
+      
+      // Backdoor: /clear command
+      if (text === '/clear') {
+        ws.send(JSON.stringify({ type: 'command', command: 'clear' }));
+        inputEl.value = "";
+        return;
+      }
+      
+      ws.send(JSON.stringify({ type: 'message', user: username, text: text }));
+      inputEl.value = "";
+    }
+    
+    // Enter key to send
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    // Semicolon to send (on input event)
     inputEl.addEventListener("input", () => {
       const v = inputEl.value;
       if (v.endsWith(";")) {
@@ -94,7 +124,7 @@
         }
       }
     });
-
+    
     render();
   </script>
 </body>
