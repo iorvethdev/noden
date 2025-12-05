@@ -2,99 +2,153 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HyperTalk</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
     body {
       background: Black;
       color: #d0d0d0;
       font-family: Consolas, monospace;
       color: Green;
-      margin: 0;
-      padding: 0;
-    }
-    #messages {
-      padding: 20px;
-      white-space: pre-wrap;
-      color: Green;
-      height: calc(100vh - 100px);
-      overflow-y: auto;
-    }
-    #input {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 12px;
-      font-size: 16px;
-      font-family: inherit;
-      color: Green;
-      border: none;
-      outline: none;
+      display: flex;
+      flex-direction: column;
     }
     #bar {
       background: #0b3e91;
       padding: 10px;
       color: #DEDEDE;
       font-size: 14px;
+      flex-shrink: 0;
+    }
+    #messages {
+      padding: 20px;
+      white-space: pre-wrap;
+      color: Green;
+      flex: 1;
+      overflow-y: auto;
+      word-wrap: break-word;
+      word-break: break-word;
+    }
+    #inputContainer {
+      display: flex;
+      flex-shrink: 0;
+      border-top: 1px solid #0b3e91;
+    }
+    #input {
+      flex: 1;
+      padding: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      color: Green;
+      background: Black;
+      border: none;
+      outline: none;
+    }
+    #input:focus {
+      outline: none;
+    }
+    /* IE11 fixes */
+    body {
+      display: -ms-flexbox;
+      -ms-flex-direction: column;
+    }
+    #messages {
+      -ms-flex: 1;
+    }
+    #inputContainer {
+      display: -ms-flexbox;
+      -ms-flex-direction: row;
+    }
+    #input {
+      -ms-flex: 1;
+    }
+    /* Mobile adjustments */
+    @media (max-width: 600px) {
+      #bar {
+        font-size: 12px;
+        padding: 8px;
+      }
+      #messages {
+        padding: 12px;
+        font-size: 14px;
+      }
+      #input {
+        padding: 10px;
+        font-size: 14px;
+      }
     }
   </style>
 </head>
 <body>
   <div id="bar">HyperTalk</div>
   <div id="messages"></div>
-  <input id="input" placeholder="type message... end with ; to send">
-
+  <div id="inputContainer">
+    <input id="input" placeholder="type message... end with ; to send">
+  </div>
   <script>
-    const username = prompt("Choose username:") || "Unknown";
-    const messagesEl = document.getElementById("messages");
-    const inputEl = document.getElementById("input");
-    const chatLog = [];
-
+    var username = prompt("Choose username:") || "Unknown";
+    var messagesEl = document.getElementById("messages");
+    var inputEl = document.getElementById("input");
+    var chatLog = [];
+    
     // Connect to WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
-
-    ws.onopen = () => {
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var ws = new WebSocket(protocol + '//' + window.location.host);
+    
+    ws.onopen = function() {
       console.log('Connected to HyperTalk');
     };
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+    
+    ws.onmessage = function(event) {
+      var msg = JSON.parse(event.data);
       
       if (msg.type === 'history') {
-        // Load existing messages
-        chatLog.push(...msg.data);
+        chatLog = chatLog.concat(msg.data);
         render();
       } else if (msg.type === 'message') {
-        // Add new message
         chatLog.push(msg.data);
         render();
       }
     };
-
-    ws.onerror = (error) => {
+    
+    ws.onerror = function(error) {
       console.error('WebSocket error:', error);
       messagesEl.textContent += '\n[Connection error]\n';
     };
-
-    ws.onclose = () => {
+    
+    ws.onclose = function() {
       messagesEl.textContent += '\n[Disconnected from server]\n';
     };
-
+    
     function render() {
-      messagesEl.textContent = chatLog.map(m => `${m.user} >> ${m.text}`).join("\n");
+      var output = '';
+      for (var i = 0; i < chatLog.length; i++) {
+        output += chatLog[i].user + ' >> ' + chatLog[i].text + '\n';
+      }
+      messagesEl.textContent = output;
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-
-    inputEl.addEventListener("input", () => {
-      const v = inputEl.value;
-      if (v.endsWith(";")) {
-        const msgText = v.slice(0, -1).trim();
+    
+    inputEl.addEventListener("input", function() {
+      var v = inputEl.value;
+      if (v.charAt(v.length - 1) === ";") {
+        var msgText = v.slice(0, -1).trim();
         if (msgText.length > 0) {
           ws.send(JSON.stringify({ type: 'message', user: username, text: msgText }));
           inputEl.value = "";
         }
       }
     });
-
+    
     render();
   </script>
 </body>
