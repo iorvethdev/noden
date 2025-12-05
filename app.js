@@ -1,21 +1,49 @@
 const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
 const path = require('path');
-const indexRouter = require('./routes/index');
 
 const app = express();
-const PORT = 3000;
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-// Serve static files from the "public" directory
-app.use(express.static(path.join(__dirname, 'public')));
+const PORT = process.env.PORT || 3000;
 
-// Use the router for handling routes
-app.use('/', indexRouter);
+// Serve static files
+app.use(express.static('public'));
 
-// Catch-all route for handling 404 errors
-app.use((req, res, next) => {
-    res.status(404).sendFile(path.join(__dirname, 'views', '404.html'));
+// Chat log stored in memory
+let chatLog = [];
+
+// WebSocket connection handler
+wss.on('connection', (ws) => {
+  // Send existing chat history to new client
+  ws.send(JSON.stringify({ type: 'history', data: chatLog }));
+
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'message' && msg.user && msg.text) {
+        const chatMsg = { user: msg.user, text: msg.text, timestamp: new Date().toISOString() };
+        chatLog.push(chatMsg);
+        
+        // Broadcast to all connected clients
+        wss.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'message', data: chatMsg }));
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Message parse error:', e);
+    }
   });
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}/`);
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`HyperTalk running on port ${PORT}`);
 });
